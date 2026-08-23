@@ -305,6 +305,7 @@ kbd {
     <button class="btn btn-accent" id="mainBtn" onclick="handleMain()">Iniciar</button>
     <button class="btn" id="resetBtn" onclick="handleReset()" style="display:none">Reiniciar</button>
     <button class="btn" id="copyPromptBtn" onclick="copyPrompt()" title="Copiá este prompt para pedirle a otra IA que genere texto sin formato">📋 Copiar prompt</button>
+    <button class="btn" id="pasteNewBtn" onclick="pasteNew()" title="Borra el texto actual y pega el nuevo texto que tengas copiado en el portapapeles">📥 Pegar nuevo</button>
     <span class="hint"><kbd>Espacio</kbd> pausa &nbsp; <kbd>←</kbd><kbd>→</kbd> saltar</span>
   </div>
 
@@ -612,34 +613,46 @@ async function runDictado() {
   if (running && idx >= tokens.length) finish();
 }
 
+function doStart() {
+  const text = document.getElementById('txt').value.trim();
+  if (!text) return;
+  tokens = tokenize(text);
+  if (!tokens.length) return;
+  idx = 0; stopped = false; running = true; paused = false;
+  idleMsg.style.display = 'none';
+  av.style.display = 'flex';
+  document.getElementById('txt').disabled = true;
+  resetBtn.style.display = '';
+  mainBtn.textContent = 'Pausar';
+  syncFab();
+  runDictado();
+}
+
+function doResume() {
+  paused = false; mainBtn.textContent = 'Pausar';
+  if (inGap && gapResolve) {
+    const ms = getPause(parseFloat(spdSlider.value), tokens[idx]);
+    gapTimer = setTimeout(() => { inGap = false; const r = gapResolve; gapResolve = null; r(); }, ms);
+  }
+  setStatus('on');
+  syncFab();
+}
+
+function doPause() {
+  paused = true; mainBtn.textContent = 'Continuar';
+  if (inGap) { clearTimeout(gapTimer); gapTimer = null; }
+  else synth.cancel();
+  setStatus('off');
+  syncFab();
+}
+
 function handleMain() {
   if (!running) {
-    const text = document.getElementById('txt').value.trim();
-    if (!text) return;
-    tokens = tokenize(text);
-    if (!tokens.length) return;
-    idx = 0; stopped = false; running = true; paused = false;
-    idleMsg.style.display = 'none';
-    av.style.display = 'flex';
-    document.getElementById('txt').disabled = true;
-    resetBtn.style.display = '';
-    mainBtn.textContent = 'Pausar';
-    syncFab();
-    runDictado();
+    doStart();
   } else if (paused) {
-    paused = false; mainBtn.textContent = 'Pausar';
-    if (inGap && gapResolve) {
-      const ms = getPause(parseFloat(spdSlider.value), tokens[idx]);
-      gapTimer = setTimeout(() => { inGap = false; const r = gapResolve; gapResolve = null; r(); }, ms);
-    }
-    setStatus('on');
-    syncFab();
+    doResume();
   } else {
-    paused = true; mainBtn.textContent = 'Continuar';
-    if (inGap) { clearTimeout(gapTimer); gapTimer = null; }
-    else synth.cancel();
-    setStatus('off');
-    syncFab();
+    doPause();
   }
 }
 
@@ -677,6 +690,27 @@ function finish() {
   syncFab();
 }
 
+async function pasteNew() {
+  const btn = document.getElementById('pasteNewBtn');
+  try {
+    const clipText = await navigator.clipboard.readText();
+    if (!clipText || !clipText.trim()) return;
+    // Corta cualquier dictado en curso y limpia todo el estado
+    handleReset();
+    document.getElementById('txt').value = clipText;
+
+    const orig = btn.textContent;
+    btn.textContent = '✓ Pegado';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color = 'var(--accent2)';
+    setTimeout(() => { btn.textContent = orig; btn.style.borderColor = ''; btn.style.color = ''; }, 1500);
+  } catch (err) {
+    const orig = btn.textContent;
+    btn.textContent = '✗ Sin permiso';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }
+}
+
 function copyPrompt() {
   const text = document.getElementById('promptText').textContent;
   navigator.clipboard.writeText(text).then(() => {
@@ -692,7 +726,8 @@ function copyPrompt() {
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && !['TEXTAREA','INPUT','SELECT'].includes(e.target.tagName)) {
     e.preventDefault();
-    if (running || paused) handleMain();
+    // La barra espaciadora SIEMPRE pausa el dictado (nunca lo reanuda ni alterna).
+    if (running && !paused) doPause();
   }
   if (e.code === 'ArrowRight' && running) skipTo(1);
   if (e.code === 'ArrowLeft'  && running) skipTo(-1);
