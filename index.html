@@ -1,353 +1,702 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYAP | Monitor de Producción</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --bg-base: #0c0c0f;
-            --bg-card: #1a1a1e;
-            --bg-header: #121214;
-            --border-color: #2a2a30;
-            --text-main: #e1e1e6;
-            --text-muted: #a1a1aa;
-            --accent-m1: #3b82f6; /* Azul medio */
-            --accent-m2: #10b981; /* Verde apagado */
-            --accent-m3: #d97706; /* Naranja oscuro */
-            --accent-general: #6366f1;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dictado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0c0c10;
+  --s1:        #13131a;
+  --s2:        #1a1a24;
+  --s3:        #22222e;
+  --border:    #28283a;
+  --bh:        #3a3a52;
+  --text:      #e8e8f0;
+  --muted:     #7878a0;
+  --faint:     #3a3a55;
+  --accent:    #9333ea;
+  --accent2:   #c084fc;
+  --accentdim: #4a1d7a;
+  --accentglow:#7c3aed44;
+  --green:     #34d399;
+  --amber:     #fbbf24;
+  --r:         10px;
+  --rl:        15px;
+}
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 48px 20px 100px;
+}
+.wrap { width: 100%; max-width: 640px; }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background-color: var(--bg-base); color: var(--text-main); font-family: 'JetBrains Mono', monospace; line-height: 1.5; }
-        h1, h2, h3, .title-font { font-family: 'Syne', sans-serif; }
+.hdr { margin-bottom: 36px; }
+.hdr h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 30px; font-weight: 800;
+  letter-spacing: -1px; line-height: 1;
+  color: var(--text);
+}
+.hdr h1 em { font-style: normal; color: var(--accent2); }
+.hdr p { font-size: 14px; color: var(--muted); margin-top: 5px; }
 
-        /* Login Screen */
-        #login-screen {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: var(--bg-base); display: flex; flex-direction: column;
-            align-items: center; justify-content: center; z-index: 1000;
-        }
-        .login-card {
-            background: var(--bg-card); padding: 3rem; border: 1px solid var(--border-color);
-            border-radius: 8px; text-align: center; max-width: 400px;
-        }
-        .login-card h1 { font-size: 2rem; margin-bottom: 1rem; color: var(--text-main); }
-        .login-card p { color: var(--text-muted); margin-bottom: 2rem; }
-        .btn-google {
-            background: #ffffff; color: #000000; font-family: 'Syne', sans-serif; font-weight: 600;
-            padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; transition: opacity 0.2s;
-        }
-        .btn-google:hover { opacity: 0.9; }
+.card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  overflow: hidden;
+}
+textarea {
+  display: block; width: 100%;
+  min-height: 120px;
+  padding: 16px 18px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px; line-height: 1.7;
+  color: var(--text); background: transparent;
+  border: none; outline: none; resize: vertical;
+}
+textarea::placeholder { color: var(--faint); }
+textarea:disabled { opacity: .35; cursor: not-allowed; }
+.card-footer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+.card-footer label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+select {
+  flex: 1; min-width: 0;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; color: var(--text);
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 7px 10px;
+  cursor: pointer; outline: none;
+}
+select:focus { border-color: var(--accentdim); }
 
-        /* Dashboard */
-        #dashboard { display: none; padding-bottom: 4rem; }
-        header {
-            background: var(--bg-header); border-bottom: 1px solid var(--border-color);
-            padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;
-        }
-        .header-left { display: flex; align-items: center; gap: 20px; }
-        .brand { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
-        .clock { color: var(--text-muted); font-size: 0.9rem; }
-        .status-dot { width: 10px; height: 10px; background-color: var(--accent-m2); border-radius: 50%; box-shadow: 0 0 8px var(--accent-m2); animation: pulse 2s infinite; }
-        
-        .user-profile { display: flex; align-items: center; gap: 15px; }
-        .user-profile img { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border-color); }
-        .btn-logout { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); padding: 6px 12px; cursor: pointer; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+/* Speed bar — solo la barra, sin labels */
+.speed-wrap { margin-top: 16px; }
+.speed-icons {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 8px;
+  font-size: 11px; color: var(--faint);
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.speed-val {
+  font-size: 12px; color: var(--accent2); font-weight: 500;
+  min-width: 60px; text-align: center;
+}
 
-        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-        .section-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 15px; }
-        .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
-        .section { margin-bottom: 4rem; }
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px;
+  border-radius: 3px; outline: none; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) 0%, var(--border) 0%);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent2);
+  border: 2.5px solid var(--bg);
+  box-shadow: 0 0 0 2px var(--accentdim), 0 0 10px var(--accentglow);
+  transition: transform .12s, box-shadow .12s;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--accentdim), 0 0 16px var(--accentglow);
+}
+input[type=range]::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent2); border: 2.5px solid var(--bg);
+}
+input[type=range]::-moz-range-track { background: transparent; }
 
-        /* Cards Grid */
-        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
-        .card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: 6px; position: relative; overflow: hidden; }
-        .card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
-        .card.total::before { background: var(--accent-general); }
-        .card.m1::before { background: var(--accent-m1); }
-        .card.m2::before { background: var(--accent-m2); }
-        .card.m3::before { background: var(--accent-m3); }
-        
-        .card-title { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; }
-        .card-value { font-family: 'Syne', sans-serif; font-size: 2.5rem; font-weight: 800; margin: 10px 0; }
-        .card-meta { font-size: 0.75rem; color: var(--text-muted); }
+/* Progress bar interactive */
+.bar-bg {
+  flex: 1; height: 6px; background: var(--border); border-radius: 3px;
+  overflow: visible; position: relative; cursor: pointer;
+}
+.bar-bg:hover .bar-fill { filter: brightness(1.15); }
+.bar-scrub-thumb {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent2);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 2px var(--accentdim);
+  pointer-events: none;
+  opacity: 0; transition: opacity .15s;
+}
+.bar-bg:hover .bar-scrub-thumb,
+.bar-bg.dragging .bar-scrub-thumb { opacity: 1; }
 
-        /* Charts Grid */
-        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
-        .chart-container { background: var(--bg-card); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: 6px; height: 300px; }
+/* Buttons */
+.btn-row { display: flex; gap: 10px; margin-top: 18px; align-items: center; flex-wrap: wrap; }
+.btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px; font-weight: 500;
+  padding: 10px 22px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--s1); color: var(--text);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--s2); border-color: var(--bh); }
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .3; cursor: default; transform: none; }
+.btn-accent {
+  background: var(--accent); color: #fff;
+  border-color: var(--accent); min-width: 105px; text-align: center;
+  box-shadow: 0 0 14px var(--accentglow);
+}
+.btn-accent:hover { opacity: .88; background: var(--accent); }
+.hint { margin-left: auto; font-size: 12px; color: var(--faint); }
+kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--bh);
+  border-radius: 4px;
+  font-family: monospace; font-size: 11px;
+  color: var(--muted); background: var(--s2);
+}
 
-        /* Table */
-        .table-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { background: var(--bg-header); padding: 1rem; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); }
-        td { padding: 1rem; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
-        tr:last-child td { border-bottom: none; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-        .badge.m1 { background: rgba(59, 130, 246, 0.1); color: var(--accent-m1); border: 1px solid var(--accent-m1); }
-        .badge.m2 { background: rgba(16, 185, 129, 0.1); color: var(--accent-m2); border: 1px solid var(--accent-m2); }
-        .badge.m3 { background: rgba(217, 119, 6, 0.1); color: var(--accent-m3); border: 1px solid var(--accent-m3); }
+/* Stage */
+.stage {
+  margin-top: 18px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  padding: 32px 24px 26px;
+  min-height: 150px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 18px;
+}
+.idle {
+  font-size: 14px; color: var(--faint);
+  font-style: italic; padding: 16px 0;
+}
+.active { display: none; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
 
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
-        @media (max-width: 1024px) { .charts-grid { grid-template-columns: 1fr; } }
-    </style>
+.status-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--faint);
+  letter-spacing: .07em; text-transform: uppercase;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.dot.on  { background: var(--green); animation: blink 1.1s infinite; }
+.dot.off { background: var(--amber); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+.word {
+  font-family: 'Syne', sans-serif;
+  font-size: 54px; font-weight: 800;
+  letter-spacing: -2px; line-height: 1;
+  color: var(--text); text-align: center;
+  min-height: 60px;
+  transition: opacity .07s, transform .07s;
+}
+.word.pop { opacity: 0; transform: scale(.92); }
+
+.ctx-line {
+  font-size: 14px; color: var(--faint); text-align: center; min-height: 20px;
+}
+.ctx-line .cur { color: var(--accent2); font-weight: 500; border-bottom: 1.5px solid var(--accent); padding-bottom: 1px; }
+
+/* Progress + skip */
+.prog-area { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.prog-row { display: flex; align-items: center; gap: 10px; }
+.bar-bg { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(to right, var(--accent), var(--accent2)); border-radius: 2px; transition: width .18s; }
+.prog-lbl { font-size: 12px; color: var(--muted); min-width: 44px; text-align: right; }
+
+.skip-row { display: flex; gap: 8px; justify-content: center; }
+.skip-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--s2); color: var(--muted);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, transform .1s;
+}
+.skip-btn:hover { background: var(--s3); color: var(--text); border-color: var(--bh); }
+.skip-btn:active { transform: scale(.96); }
+.skip-btn:disabled { opacity: .3; cursor: default; }
+
+/* Botón flotante de pausa en móvil */
+.fab-pause {
+  display: none;
+}
+@media (max-width: 600px) {
+  .fab-pause {
+    display: flex;
+    align-items: center; justify-content: center;
+    position: fixed;
+    bottom: 24px; left: 50%; transform: translateX(-50%);
+    width: calc(100% - 40px); max-width: 400px;
+    height: 68px;
+    font-family: 'Syne', sans-serif;
+    font-size: 20px; font-weight: 800; letter-spacing: .5px;
+    border-radius: 20px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 6px 32px var(--accentglow), 0 2px 8px #0008;
+    cursor: pointer;
+    z-index: 100;
+    transition: background .15s, transform .1s, opacity .2s;
+    opacity: 0; pointer-events: none;
+  }
+  .fab-pause.visible {
+    opacity: 1; pointer-events: auto;
+  }
+  .fab-pause:active { transform: translateX(-50%) scale(.96); }
+  .fab-pause.paused {
+    background: var(--s3);
+    border: 2px solid var(--accent);
+    color: var(--accent2);
+  }
+  /* espacio para que el stage no quede tapado */
+  .stage { margin-bottom: 90px; }
+}
+</style>
 </head>
 <body>
+<div class="wrap">
 
-    <div id="login-screen">
-        <div class="login-card">
-            <h1 class="title-font">CYAP</h1>
-            <p>Sistema de Monitoreo de Producción Industrial.</p>
-            <button class="btn-google" id="btn-login">
-                <img src="https://www.google.com/favicon.ico" alt="Google" width="18"> Continuar con Google
-            </button>
-        </div>
+  <div class="hdr">
+    <h1>Dic<em>tado</em></h1>
+    <p>Pegá el texto, ajustá la velocidad y escribí a tu ritmo.</p>
+  </div>
+
+  <!-- Texto -->
+  <div class="card">
+    <textarea id="txt" placeholder="Pegá o escribí el texto aquí…"></textarea>
+    <div class="card-footer">
+      <label>Voz</label>
+      <select id="voiceSelect"><option>Cargando voces…</option></select>
     </div>
+  </div>
 
-    <div id="dashboard">
-        <header>
-            <div class="header-left">
-                <div class="brand title-font">CYAP_SYS</div>
-                <div class="status-dot" title="Firebase Conectado"></div>
-                <div class="clock" id="live-clock">--:--:--</div>
-            </div>
-            <div class="user-profile">
-                <span id="user-name" style="font-size: 0.9rem;"></span>
-                <img id="user-photo" src="" alt="User" style="display: none;">
-                <button class="btn-logout" id="btn-logout">Cerrar Sesión</button>
-            </div>
-        </header>
-
-        <div class="container">
-            <div class="section">
-                <h2 class="section-title title-font">Resumen del Día</h2>
-                <div class="cards-grid">
-                    <div class="card total">
-                        <div class="card-title">Total Planta (Hoy)</div>
-                        <div class="card-value" id="val-total">0</div>
-                        <div class="card-meta">Último: <span id="time-total">--</span></div>
-                    </div>
-                    <div class="card m1">
-                        <div class="card-title">Máquina 1 (Central)</div>
-                        <div class="card-value" id="val-m1">0</div>
-                        <div class="card-meta">Último: <span id="time-m1">--</span></div>
-                    </div>
-                    <div class="card m2">
-                        <div class="card-title">Máquina 2 (Nodo 2)</div>
-                        <div class="card-value" id="val-m2">0</div>
-                        <div class="card-meta">Último: <span id="time-m2">--</span></div>
-                    </div>
-                    <div class="card m3">
-                        <div class="card-title">Máquina 3 (Nodo 3)</div>
-                        <div class="card-value" id="val-m3">0</div>
-                        <div class="card-meta">Último: <span id="time-m3">--</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title title-font">Análisis Gráfico</h2>
-                <div class="charts-grid">
-                    <div class="chart-container"><canvas id="chart-hourly"></canvas></div>
-                    <div class="chart-container"><canvas id="chart-daily"></canvas></div>
-                    <div class="chart-container"><canvas id="chart-monthly"></canvas></div>
-                    <div class="chart-container"><canvas id="chart-total"></canvas></div>
-                </div>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title title-font">Historial de Eventos (Últimos 100)</h2>
-                <div class="table-container">
-                    <table>
-                        <thead><tr><th>Fecha y Hora</th><th>Origen</th><th>Máquina</th><th>Hace...</th></tr></thead>
-                        <tbody id="table-body"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+  <!-- Velocidad — solo la barra -->
+  <div class="speed-wrap">
+    <div class="speed-icons">
+      <span>🐢 Lento</span>
+      <span class="speed-val" id="spdVal"></span>
+      <span>Rápido 🐇</span>
     </div>
+    <input type="range" id="spd" min="0" max="1" value="0.2" step="0.001">
+  </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { getFirestore, collection, query, orderBy, limit, onSnapshot, where } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  <!-- Prompt oculto -->
+  <span id="promptText" style="display:none">Escribí el texto de corrido, en prosa, sin ningún tipo de formato. No uses negritas, cursivas, títulos, subtítulos, listas con guiones o viñetas, numeración, ni ningún símbolo de markdown como asteriscos, almohadillas, guiones bajos o corchetes. Separás los párrafos con un salto de línea simple, igual que texto plano. No uses doble salto de línea ni sangría. El texto tiene que leerse como si fuera escrito a mano, con párrafos naturales donde corresponda. Si el texto original que te paso tiene párrafos, respetá esa estructura. Si te pido un resumen, hacélo en párrafos separados por un solo salto de línea, sin ningún símbolo extra.</span>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyAsC0ossvmk72Ewt2KBsFwYOjmZ4En_CN8",
-            authDomain: "cyap-66.firebaseapp.com",
-            projectId: "cyap-66",
-            storageBucket: "cyap-66.firebasestorage.app",
-            messagingSenderId: "645856550801",
-            appId: "1:645856550801:web:b53033f2be6c77f0f28430"
-        };
+  <!-- Botones principales -->
+  <div class="btn-row">
+    <button class="btn btn-accent" id="mainBtn" onclick="handleMain()">Iniciar</button>
+    <button class="btn" id="resetBtn" onclick="handleReset()" style="display:none">Reiniciar</button>
+    <button class="btn" id="copyPromptBtn" onclick="copyPrompt()" title="Copiá este prompt para pedirle a otra IA que genere texto sin formato">📋 Copiar prompt</button>
+    <span class="hint"><kbd>Espacio</kbd> pausa &nbsp; <kbd>←</kbd><kbd>→</kbd> saltar</span>
+  </div>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        let unsubscribeFirestore = null;
+  <!-- Stage -->
+  <div class="stage">
+    <div class="idle" id="idleMsg">Listo para dictar.</div>
+    <div class="active" id="av">
+      <div class="status-row"><span class="dot" id="dot"></span><span id="stTxt">Dictando</span></div>
+      <div class="word" id="wd"></div>
+      <div class="ctx-line" id="ctx"></div>
+      <div class="prog-area">
+        <div class="prog-row">
+          <div class="bar-bg" id="progBar">
+            <div class="bar-fill" id="bf" style="width:0%"></div>
+            <div class="bar-scrub-thumb" id="scrubThumb" style="left:0%"></div>
+          </div>
+          <span class="prog-lbl" id="pl">0 / 0</span>
+        </div>
+        <div class="skip-row">
+          <button class="skip-btn" id="prevBtn" onclick="skipTo(-1)">← Anterior</button>
+          <button class="skip-btn" id="nextBtn" onclick="skipTo(1)">Siguiente →</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-        // UI Elements
-        const loginScreen = document.getElementById('login-screen');
-        const dashboard = document.getElementById('dashboard');
-        const btnLogin = document.getElementById('btn-login');
-        const btnLogout = document.getElementById('btn-logout');
+</div>
 
-        // Reloj en vivo
-        setInterval(() => {
-            const now = new Date();
-            document.getElementById('live-clock').innerText = now.toLocaleTimeString('es-AR', { hour12: false });
-        }, 1000);
+<!-- Botón flotante pausa (solo móvil) -->
+<button class="fab-pause" id="fabPause" onclick="handleMain()">⏸ Pausar</button>
 
-        // Setup Charts Global Theme
-        Chart.defaults.color = '#a1a1aa';
-        Chart.defaults.font.family = "'JetBrains Mono', monospace";
-        Chart.defaults.borderColor = '#2a2a30';
+<script>
+const synth = window.speechSynthesis;
+let voices = [], tokens = [], idx = 0;
+let running = false, paused = false, stopped = false;
+let gapResolve = null, gapTimer = null, inGap = false;
+let skipRequested = false;
 
-        const chartHourlyCtx = document.getElementById('chart-hourly').getContext('2d');
-        const chartDailyCtx = document.getElementById('chart-daily').getContext('2d');
-        const chartMonthlyCtx = document.getElementById('chart-monthly').getContext('2d');
-        const chartTotalCtx = document.getElementById('chart-total').getContext('2d');
+// Mapa de signos → cómo dictarlos en voz
+const PUNCT_SPEECH = {
+  ',':  'coma',
+  '.':  'punto',
+  ':':  'dos puntos',
+  ';':  'punto y coma',
+  '!':  'signo de exclamación',
+  '¡':  'signo de apertura de exclamación',
+  '?':  'signo de pregunta',
+  '¿':  'signo de apertura de interrogación',
+  '-':  'guion',
+  '—':  'raya',
+  '–':  'guion largo',
+  '(':  'paréntesis que abre',
+  ')':  'paréntesis que cierra',
+  '"':  'comillas',
+  '"':  'comillas que abren',
+  '"':  'comillas que cierran',
+  "'":  'apóstrofe',
+  '«':  'comillas angulares que abren',
+  '»':  'comillas angulares que cierran',
+  '/':  'barra',
+  '\\': 'barra invertida',
+  '@':  'arroba',
+  '#':  'numeral',
+  '%':  'por ciento',
+  '&':  'et',
+  '*':  'asterisco',
+  '+':  'más',
+  '=':  'igual',
+  '_':  'guion bajo',
+  '\n': 'punto aparte',
+};
 
-        // Instancias vacías de gráficos
-        let chartHourly = new Chart(chartHourlyCtx, { type: 'bar', data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Producción por Hora (Hoy)', color: '#e1e1e6' } } } });
-        let chartDaily = new Chart(chartDailyCtx, { type: 'line', data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Producción Diaria (Últimos 30 días)', color: '#e1e1e6' } } } });
-        let chartMonthly = new Chart(chartMonthlyCtx, { type: 'bar', data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Producción Mensual', color: '#e1e1e6' } } } });
-        let chartTotal = new Chart(chartTotalCtx, { type: 'doughnut', data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Distribución Total Planta', color: '#e1e1e6' } }, cutout: '70%' } });
+// Detecta si un token es solo puntuación
+function isPunct(s) { return PUNCT_SPEECH.hasOwnProperty(s); }
 
-        // Auth Logic
-        btnLogin.addEventListener('click', () => { signInWithPopup(auth, new GoogleAuthProvider()); });
-        btnLogout.addEventListener('click', () => { signOut(auth); });
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                loginScreen.style.display = 'none';
-                dashboard.style.display = 'block';
-                document.getElementById('user-name').innerText = user.displayName;
-                document.getElementById('user-photo').src = user.photoURL;
-                document.getElementById('user-photo').style.display = 'block';
-                startListening();
-            } else {
-                loginScreen.style.display = 'flex';
-                dashboard.style.display = 'none';
-                if (unsubscribeFirestore) unsubscribeFirestore();
-            }
-        });
-
-        // Funciones de procesamiento de datos
-        function formatTimeAgo(date) {
-            const seconds = Math.floor((new Date() - date) / 1000);
-            if (seconds < 60) return "Hace instantes";
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `Hace ${minutes} min`;
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `Hace ${hours} h`;
-            return `Hace ${Math.floor(hours / 24)} días`;
+// Convierte el texto en tokens: palabras + signos de puntuación separados
+// Punto seguido vs punto aparte se detecta por si hay \n o no después del punto
+function tokenize(text) {
+  const result = [];
+  // Primero dividir por líneas para detectar punto aparte
+  const lines = text.split('\n');
+  lines.forEach((line, li) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (li < lines.length - 1) result.push({ raw: '\n', speech: 'punto aparte' });
+      return;
+    }
+    // Tokenizar cada línea: separar palabras y signos pegados
+    // Regex: secuencia de letras/números, o un carácter de puntuación
+    const matches = trimmed.match(/[\w\u00C0-\u024F\u1E00-\u1EFF]+|[^\w\s\u00C0-\u024F\u1E00-\u1EFF]/g) || [];
+    matches.forEach((m, mi) => {
+      if (/\s/.test(m)) return;
+      if (PUNCT_SPEECH[m]) {
+        // Punto: si es el último carácter de una línea y hay más líneas → punto aparte; sino punto seguido
+        if (m === '.' && mi === matches.length - 1 && li < lines.length - 1) {
+          result.push({ raw: m, speech: 'punto aparte' });
+        } else if (m === '.') {
+          result.push({ raw: m, speech: 'punto seguido' });
+        } else {
+          result.push({ raw: m, speech: PUNCT_SPEECH[m] });
         }
+      } else {
+        result.push({ raw: m, speech: m });
+      }
+    });
+    // Salto de línea entre líneas (si no termina en punto)
+    if (li < lines.length - 1 && trimmed && !trimmed.match(/[.!?]$/)) {
+      // no agregar punto aparte si ya hay signo final
+    }
+  });
+  return result.filter(t => t.raw.trim() !== '' || t.speech === 'punto aparte');
+}
 
-        function getMachineData(id) {
-            if (id === 1) return { name: "Central", class: "m1" };
-            if (id === 2) return { name: "Nodo 2", class: "m2" };
-            if (id === 3) return { name: "Nodo 3", class: "m3" };
-            return { name: `Desc ${id}`, class: "" };
-        }
+function getRate(t)      { return 0.35 + t * 1.45; }
+function getMsPerChar(t) { return 350 - t * 330; }
+function getPause(t, tok){
+  const base = isPunct(tok.raw) ? tok.raw.length * 20 : tok.raw.length * getMsPerChar(t);
+  return Math.max(120, Math.round(base));
+}
 
-        function startListening() {
-            const q = query(collection(db, "pulsos"), orderBy("timestamp", "desc"), limit(1000)); // Traemos más para gráficos
-            
-            unsubscribeFirestore = onSnapshot(q, (snapshot) => {
-                const now = new Date();
-                const todayStr = now.toLocaleDateString('es-AR');
-                
-                let countsToday = { total: 0, m1: 0, m2: 0, m3: 0 };
-                let lastTimes = { total: null, m1: null, m2: null, m3: null };
-                
-                let tableHTML = "";
-                let eventsCount = 0;
+const spdSlider = document.getElementById('spd');
+const spdVal    = document.getElementById('spdVal');
+const voiceSel  = document.getElementById('voiceSelect');
+const mainBtn   = document.getElementById('mainBtn');
+const resetBtn  = document.getElementById('resetBtn');
+const idleMsg   = document.getElementById('idleMsg');
+const av        = document.getElementById('av');
+const wdEl      = document.getElementById('wd');
+const ctxEl     = document.getElementById('ctx');
+const bf        = document.getElementById('bf');
+const pl        = document.getElementById('pl');
+const dot       = document.getElementById('dot');
+const stTxt     = document.getElementById('stTxt');
+const progBar   = document.getElementById('progBar');
+const scrubThumb= document.getElementById('scrubThumb');
+const fabPause  = document.getElementById('fabPause');
 
-                // Estructuras para gráficos
-                let hourlyData = Array(24).fill(0);
-                let dailyDataM1 = {}; let dailyDataM2 = {}; let dailyDataM3 = {};
-                let monthlyDataM1 = Array(12).fill(0); let monthlyDataM2 = Array(12).fill(0); let monthlyDataM3 = Array(12).fill(0);
+function syncFab() {
+  if (!running && !paused) {
+    fabPause.classList.remove('visible','paused');
+  } else if (paused) {
+    fabPause.classList.add('visible','paused');
+    fabPause.textContent = '▶ Continuar';
+  } else {
+    fabPause.classList.add('visible');
+    fabPause.classList.remove('paused');
+    fabPause.textContent = '⏸ Pausar';
+  }
+}
 
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (!data.timestamp) return;
-                    const date = data.timestamp.toDate();
-                    const dateStr = date.toLocaleDateString('es-AR');
-                    const mId = data.machine_id;
+function speedLabel(t) {
+  if (t < 0.2) return 'Muy lento';
+  if (t < 0.4) return 'Lento';
+  if (t < 0.6) return 'Normal';
+  if (t < 0.8) return 'Rápido';
+  return 'Muy rápido';
+}
+function syncSlider() {
+  const t = parseFloat(spdSlider.value);
+  const pct = t * 100;
+  spdSlider.style.background =
+    `linear-gradient(to right, var(--accent) ${pct}%, var(--border) ${pct}%)`;
+  spdVal.textContent = speedLabel(t);
+}
+spdSlider.addEventListener('input', syncSlider);
+syncSlider();
 
-                    // Lógica para Tarjetas (Solo Hoy)
-                    if (dateStr === todayStr) {
-                        countsToday.total++;
-                        if (mId === 1) countsToday.m1++;
-                        if (mId === 2) countsToday.m2++;
-                        if (mId === 3) countsToday.m3++;
-                        
-                        hourlyData[date.getHours()]++; // Para gráfico horario
-                    }
+// --- Scrubable progress bar ---
+function scrubToFraction(frac) {
+  if (!tokens.length) return;
+  const newIdx = Math.max(0, Math.min(tokens.length - 1, Math.round(frac * (tokens.length - 1))));
+  if (newIdx === idx) return;
+  skipRequested = true;
+  idx = newIdx;
+  synth.cancel();
+  abortGap();
+  if (paused) { updateDisplay(); skipRequested = false; }
+}
 
-                    // Lógica Última vez
-                    if (!lastTimes.total) lastTimes.total = date;
-                    if (mId === 1 && !lastTimes.m1) lastTimes.m1 = date;
-                    if (mId === 2 && !lastTimes.m2) lastTimes.m2 = date;
-                    if (mId === 3 && !lastTimes.m3) lastTimes.m3 = date;
+function barFracFromEvent(e) {
+  const rect = progBar.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+}
 
-                    // Lógica Gráficos (Mes y Día)
-                    if (date.getFullYear() === now.getFullYear()) {
-                        if (mId === 1) monthlyDataM1[date.getMonth()]++;
-                        if (mId === 2) monthlyDataM2[date.getMonth()]++;
-                        if (mId === 3) monthlyDataM3[date.getMonth()]++;
-                    }
+let isDragging = false;
+progBar.addEventListener('mousedown', e => {
+  if (!tokens.length) return;
+  isDragging = true;
+  progBar.classList.add('dragging');
+  scrubToFraction(barFracFromEvent(e));
+});
+document.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const frac = barFracFromEvent(e);
+  scrubThumb.style.left = (frac * 100) + '%';
+  scrubToFraction(frac);
+});
+document.addEventListener('mouseup', () => {
+  if (isDragging) { isDragging = false; progBar.classList.remove('dragging'); }
+});
+// Touch support
+progBar.addEventListener('touchstart', e => {
+  if (!tokens.length) return;
+  isDragging = true;
+  progBar.classList.add('dragging');
+  scrubToFraction(barFracFromEvent(e.touches[0]));
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!isDragging) return;
+  const frac = barFracFromEvent(e.touches[0]);
+  scrubThumb.style.left = (frac * 100) + '%';
+  scrubToFraction(frac);
+}, { passive: true });
+document.addEventListener('touchend', () => {
+  if (isDragging) { isDragging = false; progBar.classList.remove('dragging'); }
+});
 
-                    // Lógica Tabla (Solo 100)
-                    if (eventsCount < 100) {
-                        const mInfo = getMachineData(mId);
-                        tableHTML += `<tr>
-                            <td>${dateStr} - ${date.toLocaleTimeString('es-AR')}</td>
-                            <td>ESP32</td>
-                            <td><span class="badge ${mInfo.class}">M${mId} - ${mInfo.name}</span></td>
-                            <td style="color: var(--text-muted)">${formatTimeAgo(date)}</td>
-                        </tr>`;
-                        eventsCount++;
-                    }
-                });
+function loadVoices() {
+  voices = synth.getVoices();
+  if (!voices.length) return;
+  voiceSel.innerHTML = '';
+  const es = voices.filter(v => v.lang.startsWith('es'));
+  const list = es.length ? es : voices;
+  list.forEach(v => {
+    const o = document.createElement('option');
+    o.textContent = v.name + ' (' + v.lang + ')';
+    o.dataset.name = v.name;
+    voiceSel.appendChild(o);
+  });
+}
+loadVoices();
+if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+setTimeout(loadVoices, 600);
 
-                // Actualizar DOM Tarjetas
-                document.getElementById('val-total').innerText = countsToday.total;
-                document.getElementById('val-m1').innerText = countsToday.m1;
-                document.getElementById('val-m2').innerText = countsToday.m2;
-                document.getElementById('val-m3').innerText = countsToday.m3;
+function getVoice() {
+  const sel = voiceSel.options[voiceSel.selectedIndex];
+  if (!sel) return null;
+  return voices.find(v => v.name === sel.dataset.name) || null;
+}
 
-                document.getElementById('time-total').innerText = lastTimes.total ? lastTimes.total.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'}) : '--';
-                document.getElementById('time-m1').innerText = lastTimes.m1 ? lastTimes.m1.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'}) : '--';
-                document.getElementById('time-m2').innerText = lastTimes.m2 ? lastTimes.m2.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'}) : '--';
-                document.getElementById('time-m3').innerText = lastTimes.m3 ? lastTimes.m3.toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'}) : '--';
+function speakToken(tok) {
+  return new Promise(resolve => {
+    if (stopped) { resolve(); return; }
+    const utt = new SpeechSynthesisUtterance(tok.speech);
+    utt.rate  = getRate(parseFloat(spdSlider.value));
+    utt.pitch = 1;
+    const v = getVoice(); if (v) utt.voice = v;
+    utt.onend = utt.onerror = () => resolve();
+    synth.speak(utt);
+  });
+}
 
-                document.getElementById('table-body').innerHTML = tableHTML;
+function waitGap(tok) {
+  return new Promise(resolve => {
+    if (stopped) { resolve(); return; }
+    inGap = true; gapResolve = resolve;
+    const ms = getPause(parseFloat(spdSlider.value), tok);
+    gapTimer = setTimeout(() => { inGap = false; gapResolve = null; resolve(); }, ms);
+  });
+}
 
-                // Actualizar Gráficos
-                updateCharts(hourlyData, monthlyDataM1, monthlyDataM2, monthlyDataM3, countsToday);
-            });
-        }
+function abortGap() {
+  clearTimeout(gapTimer); gapTimer = null;
+  inGap = false;
+  if (gapResolve) { const r = gapResolve; gapResolve = null; r(); }
+}
 
-        function updateCharts(hourly, month1, month2, month3, totals) {
-            chartHourly.data = { labels: Array.from({length: 24}, (_, i) => `${i}h`), datasets: [{ label: 'Pulsos', data: hourly, backgroundColor: '#6366f1', borderRadius: 4 }] };
-            chartHourly.update();
+function updateDisplay() {
+  const tok = tokens[idx];
+  wdEl.classList.add('pop');
+  setTimeout(() => { wdEl.textContent = tok.raw === '\n' ? '↵' : tok.raw; wdEl.classList.remove('pop'); }, 75);
+  const prev = idx > 0 ? tokens[idx-1].raw : '';
+  const next = idx < tokens.length-1 ? tokens[idx+1].raw : '';
+  ctxEl.innerHTML =
+    (prev ? `<span>${prev === '\n' ? '↵' : prev}</span> ` : '') +
+    `<span class="cur">${tok.raw === '\n' ? '↵' : tok.raw}</span>` +
+    (next ? ` <span>${next === '\n' ? '↵' : next}</span>` : '');
+  const pct = Math.round(((idx+1)/tokens.length)*100);
+  bf.style.width = pct + '%';
+  scrubThumb.style.left = pct + '%';
+  pl.textContent = (idx+1) + ' / ' + tokens.length;
+  document.getElementById('prevBtn').disabled = idx === 0;
+  document.getElementById('nextBtn').disabled = idx >= tokens.length - 1;
+}
 
-            const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-            chartMonthly.data = { labels: months, datasets: [
-                { label: 'M1', data: month1, backgroundColor: '#3b82f6' },
-                { label: 'M2', data: month2, backgroundColor: '#10b981' },
-                { label: 'M3', data: month3, backgroundColor: '#d97706' }
-            ]};
-            chartMonthly.update();
+function setStatus(s) {
+  dot.className = 'dot ' + (s === 'on' ? 'on' : s === 'off' ? 'off' : '');
+  stTxt.textContent = s === 'on' ? 'Dictando' : s === 'off' ? 'Pausado' : '';
+}
 
-            chartTotal.data = { labels: ['Máquina 1', 'Máquina 2', 'Máquina 3'], datasets: [{ data: [totals.m1, totals.m2, totals.m3], backgroundColor: ['#3b82f6', '#10b981', '#d97706'], borderWidth: 0 }] };
-            chartTotal.update();
-        }
-    </script>
+async function runDictado() {
+  while (idx < tokens.length && running) {
+    if (paused) { await new Promise(r => setTimeout(r, 60)); continue; }
+    updateDisplay();
+    setStatus('on');
+    await speakToken(tokens[idx]);
+    if (!running) break;
+    if (!paused) {
+      await waitGap(tokens[idx]);
+      if (!running) break;
+      if (skipRequested) { skipRequested = false; continue; }
+      idx++;
+    }
+  }
+  if (running && idx >= tokens.length) finish();
+}
+
+function handleMain() {
+  if (!running) {
+    const text = document.getElementById('txt').value.trim();
+    if (!text) return;
+    tokens = tokenize(text);
+    if (!tokens.length) return;
+    idx = 0; stopped = false; running = true; paused = false;
+    idleMsg.style.display = 'none';
+    av.style.display = 'flex';
+    document.getElementById('txt').disabled = true;
+    resetBtn.style.display = '';
+    mainBtn.textContent = 'Pausar';
+    syncFab();
+    runDictado();
+  } else if (paused) {
+    paused = false; mainBtn.textContent = 'Pausar';
+    if (inGap && gapResolve) {
+      const ms = getPause(parseFloat(spdSlider.value), tokens[idx]);
+      gapTimer = setTimeout(() => { inGap = false; const r = gapResolve; gapResolve = null; r(); }, ms);
+    }
+    setStatus('on');
+    syncFab();
+  } else {
+    paused = true; mainBtn.textContent = 'Continuar';
+    if (inGap) { clearTimeout(gapTimer); gapTimer = null; }
+    else synth.cancel();
+    setStatus('off');
+    syncFab();
+  }
+}
+
+function skipTo(dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= tokens.length) return;
+  skipRequested = true;
+  idx = newIdx;
+  synth.cancel();
+  abortGap();
+  if (paused) { updateDisplay(); skipRequested = false; }
+}
+
+function handleReset() {
+  stopped = true; abortGap(); synth.cancel();
+  running = false; paused = false; idx = 0; tokens = [];
+  idleMsg.style.display = '';
+  av.style.display = 'none';
+  document.getElementById('txt').disabled = false;
+  mainBtn.textContent = 'Iniciar'; mainBtn.disabled = false; mainBtn.style.opacity = '';
+  resetBtn.style.display = 'none';
+  bf.style.width = '0%'; scrubThumb.style.left = '0%'; pl.textContent = '0 / 0';
+  wdEl.textContent = ''; ctxEl.innerHTML = '';
+  syncFab();
+}
+
+function finish() {
+  running = false;
+  wdEl.textContent = '✓';
+  ctxEl.innerHTML = '<span style="font-size:14px;color:var(--muted)">Completado</span>';
+  bf.style.width = '100%'; scrubThumb.style.left = '100%';
+  pl.textContent = tokens.length + ' / ' + tokens.length;
+  mainBtn.textContent = 'Iniciar'; mainBtn.disabled = true; mainBtn.style.opacity = '.3';
+  setStatus('');
+  syncFab();
+}
+
+function copyPrompt() {
+  const text = document.getElementById('promptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyPromptBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color = 'var(--accent2)';
+    setTimeout(() => { btn.textContent = orig; btn.style.borderColor = ''; btn.style.color = ''; }, 2000);
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !['TEXTAREA','INPUT','SELECT'].includes(e.target.tagName)) {
+    e.preventDefault();
+    if (running || paused) handleMain();
+  }
+  if (e.code === 'ArrowRight' && running) skipTo(1);
+  if (e.code === 'ArrowLeft'  && running) skipTo(-1);
+});
+</script>
 </body>
 </html>
