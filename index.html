@@ -201,6 +201,8 @@ kbd {
   letter-spacing: -2px; line-height: 1;
   color: var(--text); text-align: center;
   min-height: 60px;
+  width: 100%; max-width: 100%;
+  overflow: hidden; white-space: nowrap;
   transition: opacity .07s, transform .07s;
 }
 .word.pop { opacity: 0; transform: scale(.92); }
@@ -231,6 +233,63 @@ kbd {
 .skip-btn:hover { background: var(--s3); color: var(--text); border-color: var(--bh); }
 .skip-btn:active { transform: scale(.96); }
 .skip-btn:disabled { opacity: .3; cursor: default; }
+
+.icon-btn {
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--s2); color: var(--text);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--s3); border-color: var(--bh); }
+
+/* Modo enfoque: pantalla completa, solo la palabra actual */
+.focus-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 1000;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 22px;
+  padding: 40px 24px;
+}
+.focus-overlay.visible { display: flex; }
+.focus-close {
+  position: absolute; top: 18px; right: 18px;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--s1); color: var(--muted);
+  font-size: 16px; cursor: pointer;
+}
+.focus-close:hover { background: var(--s2); color: var(--text); }
+.focus-status-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--faint);
+  letter-spacing: .07em; text-transform: uppercase;
+}
+.focus-ctx {
+  font-size: 18px; color: var(--faint); text-align: center; min-height: 26px;
+}
+.focus-ctx .cur {
+  color: var(--accent2); font-weight: 500;
+  border-bottom: 2px solid var(--accent); padding-bottom: 2px;
+}
+.focus-word {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; letter-spacing: -2px; line-height: 1;
+  color: var(--text); text-align: center;
+  width: 100%; max-width: 100%;
+  overflow: hidden; white-space: nowrap;
+  transition: opacity .07s, transform .07s;
+}
+.focus-word.pop { opacity: 0; transform: scale(.92); }
+.focus-prog { width: 100%; max-width: 460px; display: flex; align-items: center; gap: 10px; }
 
 /* Botón flotante de pausa en móvil */
 .fab-pause {
@@ -284,6 +343,7 @@ kbd {
     <div class="card-footer">
       <label>Voz</label>
       <select id="voiceSelect"><option>Cargando voces…</option></select>
+      <button type="button" class="icon-btn" id="keepAliveBtn" onclick="toggleKeepAlive()" title="Tono inaudible activado: evita que el auricular Bluetooth se \&quot;duerma\&quot; y corte la primera sílaba. Tocá para desactivar.">🔈</button>
     </div>
   </div>
 
@@ -306,7 +366,8 @@ kbd {
     <button class="btn" id="resetBtn" onclick="handleReset()" style="display:none">Reiniciar</button>
     <button class="btn" id="copyPromptBtn" onclick="copyPrompt()" title="Copiá este prompt para pedirle a otra IA que genere texto sin formato">📋 Copiar prompt</button>
     <button class="btn" id="pasteNewBtn" onclick="pasteNew()" title="Borra el texto actual y pega el nuevo texto que tengas copiado en el portapapeles">📥 Pegar nuevo</button>
-    <span class="hint"><kbd>Espacio</kbd> pausa &nbsp; <kbd>←</kbd><kbd>→</kbd> saltar</span>
+    <button class="btn" id="focusBtn" onclick="toggleFocusMode()" title="Pantalla completa: solo la palabra actual, bien grande">⛶ Enfoque</button>
+    <span class="hint"><kbd>Espacio</kbd> pausa/play &nbsp; <kbd>←</kbd><kbd>→</kbd> saltar</span>
   </div>
 
   <!-- Stage -->
@@ -336,6 +397,20 @@ kbd {
 
 <!-- Botón flotante pausa (solo móvil) -->
 <button class="fab-pause" id="fabPause" onclick="handleMain()">⏸ Pausar</button>
+
+<!-- Modo enfoque: pantalla completa -->
+<div class="focus-overlay" id="focusOverlay">
+  <button class="focus-close" id="focusCloseBtn" onclick="toggleFocusMode()" title="Cerrar modo enfoque (Esc)">✕</button>
+  <div class="focus-status-row"><span class="dot" id="focusDot"></span><span id="focusStTxt"></span></div>
+  <div class="focus-ctx" id="focusCtx"></div>
+  <div class="focus-word" id="focusWord"></div>
+  <div class="focus-prog">
+    <div class="bar-bg" id="focusBarBg">
+      <div class="bar-fill" id="focusBf" style="width:0%"></div>
+    </div>
+    <span class="prog-lbl" id="focusPl">0 / 0</span>
+  </div>
+</div>
 
 <script>
 const synth = window.speechSynthesis;
@@ -426,6 +501,71 @@ function getPause(t, tok){
   return Math.max(120, Math.round(base));
 }
 
+// --- Tono inaudible de fondo (evita que el Bluetooth "duerma" el audio
+// y se coma la primera sílaba cuando vuelve a hablar tras un silencio) ---
+let audioCtx = null, keepOsc = null, keepGain = null, keepAliveEnabled = true;
+
+function ensureAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function startKeepAlive() {
+  if (!keepAliveEnabled || keepOsc) return;
+  try {
+    const ctx = ensureAudioCtx();
+    keepOsc = ctx.createOscillator();
+    keepGain = ctx.createGain();
+    keepOsc.frequency.value = 18000;  // casi inaudible para la mayoría de los oídos adultos
+    keepGain.gain.value = 0.0007;     // volumen extremadamente bajo
+    keepOsc.connect(keepGain);
+    keepGain.connect(ctx.destination);
+    keepOsc.start();
+  } catch (e) { console.warn('No se pudo iniciar el tono de mantenimiento', e); }
+}
+
+function stopKeepAlive() {
+  if (keepOsc) { try { keepOsc.stop(); } catch (e) {} keepOsc.disconnect(); keepOsc = null; }
+  if (keepGain) { keepGain.disconnect(); keepGain = null; }
+}
+
+function toggleKeepAlive() {
+  keepAliveEnabled = !keepAliveEnabled;
+  if (keepAliveEnabled) {
+    keepAliveBtn.textContent = '🔈';
+    keepAliveBtn.title = 'Tono inaudible activado: evita cortes por Bluetooth. Tocá para desactivar.';
+    if (running) startKeepAlive();
+  } else {
+    keepAliveBtn.textContent = '🔇';
+    keepAliveBtn.title = 'Tono inaudible desactivado. Tocá para activar.';
+    stopKeepAlive();
+  }
+}
+
+// --- Achicar el texto de la palabra si no entra en su recuadro ---
+function wordMaxPx()      { return window.innerWidth <= 600 ? 40 : 54; }
+function focusWordMaxPx() { return window.innerWidth <= 600 ? 60 : 120; }
+
+function fitText(el, maxPx, minPx) {
+  minPx = minPx || 16;
+  let size = maxPx;
+  el.style.fontSize = size + 'px';
+  const maxWidth = el.clientWidth;
+  if (!maxWidth) return;
+  while (el.scrollWidth > maxWidth && size > minPx) {
+    size -= 2;
+    el.style.fontSize = size + 'px';
+  }
+}
+
+window.addEventListener('resize', () => {
+  if (tokens.length && idx < tokens.length) {
+    fitText(wdEl, wordMaxPx(), 16);
+    if (focusMode) fitText(focusWordEl, focusWordMaxPx(), 24);
+  }
+});
+
 const spdSlider = document.getElementById('spd');
 const spdVal    = document.getElementById('spdVal');
 const voiceSel  = document.getElementById('voiceSelect');
@@ -442,6 +582,15 @@ const stTxt     = document.getElementById('stTxt');
 const progBar   = document.getElementById('progBar');
 const scrubThumb= document.getElementById('scrubThumb');
 const fabPause  = document.getElementById('fabPause');
+const keepAliveBtn = document.getElementById('keepAliveBtn');
+const focusOverlay = document.getElementById('focusOverlay');
+const focusWordEl  = document.getElementById('focusWord');
+const focusCtxEl   = document.getElementById('focusCtx');
+const focusBf      = document.getElementById('focusBf');
+const focusPl      = document.getElementById('focusPl');
+const focusDot     = document.getElementById('focusDot');
+const focusStTxt   = document.getElementById('focusStTxt');
+let focusMode = false;
 
 function syncFab() {
   if (!running && !paused) {
@@ -575,25 +724,53 @@ function abortGap() {
 
 function updateDisplay() {
   const tok = tokens[idx];
+  const rawText = tok.raw === '\n' ? '↵' : tok.raw;
   wdEl.classList.add('pop');
-  setTimeout(() => { wdEl.textContent = tok.raw === '\n' ? '↵' : tok.raw; wdEl.classList.remove('pop'); }, 75);
+  setTimeout(() => {
+    wdEl.textContent = rawText;
+    wdEl.classList.remove('pop');
+    fitText(wdEl, wordMaxPx(), 16);
+  }, 75);
   const prev = idx > 0 ? tokens[idx-1].raw : '';
   const next = idx < tokens.length-1 ? tokens[idx+1].raw : '';
-  ctxEl.innerHTML =
+  const ctxHtml =
     (prev ? `<span>${prev === '\n' ? '↵' : prev}</span> ` : '') +
-    `<span class="cur">${tok.raw === '\n' ? '↵' : tok.raw}</span>` +
+    `<span class="cur">${rawText}</span>` +
     (next ? ` <span>${next === '\n' ? '↵' : next}</span>` : '');
+  ctxEl.innerHTML = ctxHtml;
   const pct = Math.round(((idx+1)/tokens.length)*100);
   bf.style.width = pct + '%';
   scrubThumb.style.left = pct + '%';
   pl.textContent = (idx+1) + ' / ' + tokens.length;
   document.getElementById('prevBtn').disabled = idx === 0;
   document.getElementById('nextBtn').disabled = idx >= tokens.length - 1;
+
+  // Modo enfoque
+  focusCtxEl.innerHTML = ctxHtml;
+  focusBf.style.width = pct + '%';
+  focusPl.textContent = (idx+1) + ' / ' + tokens.length;
+  if (focusMode) {
+    focusWordEl.classList.add('pop');
+    setTimeout(() => {
+      focusWordEl.textContent = rawText;
+      focusWordEl.classList.remove('pop');
+      fitText(focusWordEl, focusWordMaxPx(), 24);
+    }, 75);
+  }
 }
 
 function setStatus(s) {
   dot.className = 'dot ' + (s === 'on' ? 'on' : s === 'off' ? 'off' : '');
   stTxt.textContent = s === 'on' ? 'Dictando' : s === 'off' ? 'Pausado' : '';
+  focusDot.className = dot.className;
+  focusStTxt.textContent = stTxt.textContent;
+}
+
+function toggleFocusMode() {
+  focusMode = !focusMode;
+  focusOverlay.classList.toggle('visible', focusMode);
+  document.body.style.overflow = focusMode ? 'hidden' : '';
+  if (focusMode && tokens.length) updateDisplay();
 }
 
 async function runDictado() {
@@ -625,6 +802,7 @@ function doStart() {
   resetBtn.style.display = '';
   mainBtn.textContent = 'Pausar';
   syncFab();
+  startKeepAlive();
   runDictado();
 }
 
@@ -667,7 +845,7 @@ function skipTo(dir) {
 }
 
 function handleReset() {
-  stopped = true; abortGap(); synth.cancel();
+  stopped = true; abortGap(); synth.cancel(); stopKeepAlive();
   running = false; paused = false; idx = 0; tokens = [];
   idleMsg.style.display = '';
   av.style.display = 'none';
@@ -676,15 +854,22 @@ function handleReset() {
   resetBtn.style.display = 'none';
   bf.style.width = '0%'; scrubThumb.style.left = '0%'; pl.textContent = '0 / 0';
   wdEl.textContent = ''; ctxEl.innerHTML = '';
+  focusBf.style.width = '0%'; focusPl.textContent = '0 / 0';
+  focusWordEl.textContent = ''; focusCtxEl.innerHTML = '';
   syncFab();
 }
 
 function finish() {
   running = false;
+  stopKeepAlive();
   wdEl.textContent = '✓';
   ctxEl.innerHTML = '<span style="font-size:14px;color:var(--muted)">Completado</span>';
   bf.style.width = '100%'; scrubThumb.style.left = '100%';
   pl.textContent = tokens.length + ' / ' + tokens.length;
+  focusWordEl.textContent = '✓';
+  focusCtxEl.innerHTML = '<span style="font-size:14px;color:var(--muted)">Completado</span>';
+  focusBf.style.width = '100%';
+  focusPl.textContent = tokens.length + ' / ' + tokens.length;
   mainBtn.textContent = 'Iniciar'; mainBtn.disabled = true; mainBtn.style.opacity = '.3';
   setStatus('');
   syncFab();
@@ -726,11 +911,23 @@ function copyPrompt() {
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && !['TEXTAREA','INPUT','SELECT'].includes(e.target.tagName)) {
     e.preventDefault();
-    // La barra espaciadora SIEMPRE pausa el dictado (nunca lo reanuda ni alterna).
-    if (running && !paused) doPause();
+    // Sacamos el foco de cualquier botón para que el navegador nunca
+    // ejecute su acción por defecto (activar el botón / scrollear la página).
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+    if (running || paused) handleMain(); // el espacio SOLO pausa o reanuda, nada más
   }
+  if (e.code === 'Escape' && focusMode) toggleFocusMode();
   if (e.code === 'ArrowRight' && running) skipTo(1);
   if (e.code === 'ArrowLeft'  && running) skipTo(-1);
+});
+document.addEventListener('keyup', e => {
+  // Doble seguro: en algunos navegadores la acción por defecto de la
+  // barra espaciadora (scroll) se dispara recién en el keyup.
+  if (e.code === 'Space' && !['TEXTAREA','INPUT','SELECT'].includes(e.target.tagName)) {
+    e.preventDefault();
+  }
 });
 </script>
 </body>
